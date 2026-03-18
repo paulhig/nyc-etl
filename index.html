@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NYC 311 ETL</title>
+<title>ETL Pipeline</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <nav class="nav">
-  <a class="nav-brand" href="index.html">NYC <span>311</span> ETL</a>
+  <a class="nav-brand" href="index.html">ETL <span>Pipeline</span></a>
   <a href="ingest.html">Ingest</a>
   <a href="clean.html">Clean</a>
   <a href="dashboard.html">Dashboard</a>
@@ -17,43 +17,79 @@
 
 <div class="page">
   <div class="page-header">
-    <div class="page-title">NYC 311 Service Requests — ETL Pipeline</div>
-    <div class="page-sub">Ingest, clean and explore New York City complaint data</div>
+    <div class="page-title">Open Data ETL Pipeline</div>
+    <div class="page-sub">Ingest, clean and explore public datasets — no backend required</div>
   </div>
 
+  <!-- Step cards -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:28px">
     <div class="card" style="border-left:3px solid var(--accent)">
       <div class="card-title"><div class="icon">1</div> Ingest</div>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Pull data from the NYC Open Data Socrata API with filters, or upload your own CSV file.</p>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Pull from the NYC 311 Socrata API or the FDA FAERS adverse events API — with filters. Or upload your own CSV file.</p>
       <a href="ingest.html" class="btn btn-primary">Start ingesting →</a>
     </div>
     <div class="card" style="border-left:3px solid var(--warning)">
       <div class="card-title"><div class="icon" style="background:var(--warning-light);color:var(--warning)">2</div> Clean</div>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Remove nulls, deduplicate, standardise casing, drop columns — see a live preview before committing.</p>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Remove nulls, deduplicate, standardise casing, normalise fields, drop columns — live preview before committing.</p>
       <a href="clean.html" class="btn">Go to clean →</a>
     </div>
     <div class="card" style="border-left:3px solid var(--success)">
       <div class="card-title"><div class="icon" style="background:var(--success-light);color:var(--success)">3</div> Dashboard</div>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">KPIs, bar/line charts, a Leaflet map of zip code hotspots, and a filterable data table.</p>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">KPIs, bar and line charts, an interactive map (NYC), drug and reaction summaries (FDA), and a filterable data table.</p>
       <a href="dashboard.html" class="btn">View dashboard →</a>
     </div>
   </div>
 
+  <!-- Data sources -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px">
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon">🏙</div> NYC 311 Service Requests
+        <span class="tag tag-blue" style="margin-left:auto">Urban</span>
+      </div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">
+        Every non-emergency service request made to New York City from 2010 to present — over 35 million records. Each row is one complaint event with a timestamp, complaint type, responding agency, borough, zip code, and lat/lng coordinates. Visualised as an interactive zip code bubble map.
+      </p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="tag tag-blue">Socrata API</span>
+        <span class="tag tag-gray">35M+ records</span>
+        <span class="tag tag-gray">Zip code map</span>
+        <span class="tag tag-green">No API key</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--success-light);color:var(--success)">💊</div> FDA Adverse Drug Events
+        <span class="tag tag-green" style="margin-left:auto">Health</span>
+      </div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">
+        Adverse drug event reports submitted to the FDA via the FAERS system since 2004. Each row is one report with drug name, patient reactions, clinical outcome, patient demographics, and receive date. Dashboard adapts automatically to show drug and reaction summaries.
+      </p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="tag tag-green">openFDA API</span>
+        <span class="tag tag-gray">Since 2004</span>
+        <span class="tag tag-gray">Drug &amp; reaction analysis</span>
+        <span class="tag tag-green">No API key</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CSV note -->
   <div class="card">
-    <div class="card-title">About the data</div>
+    <div class="card-title"><div class="icon">CSV</div> Bring your own data</div>
     <p style="font-size:13px;color:var(--text2);line-height:1.7">
-      The <strong>NYC 311 Service Requests</strong> dataset contains every non-emergency service request made to New York City from 2010 to present — over 35 million records.
-      Each row represents a single complaint event with a timestamp, complaint type, responding agency, borough, zip code, and lat/lng coordinates.
-      Data is served via the <strong>Socrata Open Data API</strong> (no API key required for up to 1,000 rows per request).
+      Not using the built-in APIs? Upload any CSV file on the Ingest page and the pipeline will auto-detect columns, apply cleaning rules, and render the dashboard with whatever fields are present. Works with any tabular dataset.
     </p>
-    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-      <span class="tag tag-blue">REST API</span>
-      <span class="tag tag-blue">CSV upload</span>
-      <span class="tag tag-green">Zip code map</span>
-      <span class="tag tag-amber">35M+ records</span>
-      <span class="tag tag-gray">No API key needed</span>
+    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+      <span class="tag tag-gray">Any CSV</span>
+      <span class="tag tag-gray">Auto column detection</span>
+      <span class="tag tag-gray">Export to CSV, JSON or Airtable</span>
     </div>
   </div>
+
 </div>
 
 <script src="js/app.js"></script>
