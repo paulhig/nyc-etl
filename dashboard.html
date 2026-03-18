@@ -148,7 +148,8 @@
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" onclick="doAirtableSave()" id="at-save-btn">Save</button>
-      <button class="btn" onclick="closeATModal()">Cancel</button>
+      <button class="btn" id="at-cancel-btn" onclick="closeATModal()">Cancel</button>
+      <button class="btn btn-success" id="at-close-btn" style="display:none" onclick="closeATModal()">✓ Close</button>
     </div>
   </div>
 </div>
@@ -435,6 +436,13 @@
   }
   function closeATModal() {
     document.getElementById('at-modal').style.display = 'none';
+    document.getElementById('at-progress').style.display = 'none';
+    document.getElementById('at-bar').style.width = '0%';
+    document.getElementById('at-status').textContent = '';
+    document.getElementById('at-save-btn').style.display = 'inline-flex';
+    document.getElementById('at-save-btn').disabled = false;
+    document.getElementById('at-cancel-btn').style.display = 'inline-flex';
+    document.getElementById('at-close-btn').style.display = 'none';
   }
 
   async function doAirtableSave() {
@@ -456,10 +464,24 @@
 
     for (let i = 0; i < filtered.length; i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
+      // Map 311 fields to the existing Airtable table fields
+      // Primary field "Name" gets unique_key, "Notes" gets a summary of the record
       const records = batch.map(r => {
-        const fields = {};
-        cols.forEach(c => { if (r[c]) fields[c] = r[c]; });
-        return { fields };
+        const notes = [
+          r.complaint_type && `Type: ${r.complaint_type}`,
+          r.descriptor     && `Detail: ${r.descriptor}`,
+          r.borough        && `Borough: ${r.borough}`,
+          r.incident_zip   && `Zip: ${r.incident_zip}`,
+          r.status         && `Status: ${r.status}`,
+          r.agency         && `Agency: ${r.agency}`,
+          r.created_date   && `Date: ${r.created_date.split('T')[0]}`,
+          r.latitude       && `Lat: ${r.latitude}`,
+          r.longitude      && `Lng: ${r.longitude}`,
+        ].filter(Boolean).join('\n');
+        return { fields: {
+          'Name':  r.unique_key || r.complaint_type || 'Request',
+          'Notes': notes
+        }};
       });
       try {
         const res = await fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}`, {
@@ -482,7 +504,9 @@
 
     setStatus(`Done — ${saved.toLocaleString()} rows saved${errors ? `, ${errors} batch errors` : ''}`);
     setBar(100);
-    btn.disabled = false;
+    btn.style.display = 'none';
+    document.getElementById('at-cancel-btn').style.display = 'none';
+    document.getElementById('at-close-btn').style.display = 'inline-flex';
   }
 
   init();
