@@ -57,7 +57,7 @@
           <div class="rule-row">
             <div class="rule-label">
               Remove duplicate rows
-              <div class="rule-sub">Deduplicate by unique_key (or first 5 fields if no key)</div>
+              <div class="rule-sub">Deduplicate by unique_key / report_id (or composite fallback)</div>
             </div>
             <label class="toggle"><input type="checkbox" id="r-dupes" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
           </div>
@@ -199,7 +199,9 @@
       const before = data.length;
       const seen = new Set();
       data = data.filter(r => {
-        const key = r.unique_key || [r.created_date, r.complaint_type, r.incident_zip, r.borough].join('|');
+        // Auto-detect the unique key field: unique_key (NYC), report_id (FDA), or composite fallback
+        const key = r.unique_key || r.report_id ||
+          Object.values(r).slice(0, 6).join('|');
         if (seen.has(key)) return false;
         seen.add(key); return true;
       });
