@@ -464,24 +464,10 @@
 
     for (let i = 0; i < filtered.length; i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
-      // Map 311 fields to the existing Airtable table fields
-      // Primary field "Name" gets unique_key, "Notes" gets a summary of the record
       const records = batch.map(r => {
-        const notes = [
-          r.complaint_type && `Type: ${r.complaint_type}`,
-          r.descriptor     && `Detail: ${r.descriptor}`,
-          r.borough        && `Borough: ${r.borough}`,
-          r.incident_zip   && `Zip: ${r.incident_zip}`,
-          r.status         && `Status: ${r.status}`,
-          r.agency         && `Agency: ${r.agency}`,
-          r.created_date   && `Date: ${r.created_date.split('T')[0]}`,
-          r.latitude       && `Lat: ${r.latitude}`,
-          r.longitude      && `Lng: ${r.longitude}`,
-        ].filter(Boolean).join('\n');
-        return { fields: {
-          'Name':  r.unique_key || r.complaint_type || 'Request',
-          'Notes': notes
-        }};
+        const fields = {};
+        cols.forEach(c => { if (r[c] != null && r[c] !== '') fields[c] = String(r[c]); });
+        return { fields };
       });
       try {
         const res = await fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}`, {
