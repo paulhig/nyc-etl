@@ -12,7 +12,7 @@ const App = (() => {
   }
 
   return {
-    saveRaw:   d => save(KEYS.raw,   d),
+    saveRaw:   d => { localStorage.removeItem(KEYS.clean); return save(KEYS.raw, d); },
     loadRaw:   () => load(KEYS.raw),
     saveClean: d => save(KEYS.clean, d),
     loadClean: () => load(KEYS.clean),
