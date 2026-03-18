@@ -3,13 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ingest — NYC 311 ETL</title>
+<title>Ingest — ETL Pipeline</title>
 <link rel="stylesheet" href="css/style.css">
+<style>
+  .source-toggle {
+    display: flex;
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 3px;
+    gap: 3px;
+    width: fit-content;
+    margin-bottom: 20px;
+  }
+  .source-btn {
+    padding: 7px 18px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .source-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    border: 0.5px solid var(--border2);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .source-panel { display: none; }
+  .source-panel.active { display: block; }
+  .source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 99px;
+    font-weight: 500;
+    margin-left: 6px;
+  }
+  .chip-nyc { background: #eff6ff; color: #2563eb; border: 0.5px solid #bfdbfe; }
+  .chip-fda { background: #f0fdf4; color: #16a34a; border: 0.5px solid #bbf7d0; }
+</style>
 </head>
 <body>
 
 <nav class="nav">
-  <a class="nav-brand" href="index.html">NYC <span>311</span> ETL</a>
+  <a class="nav-brand" href="index.html">ETL <span>Pipeline</span></a>
   <a href="ingest.html" class="active">Ingest</a>
   <a href="clean.html">Clean <span class="nav-badge" id="badge-raw" style="display:none"></span></a>
   <a href="dashboard.html">Dashboard <span class="nav-badge" id="badge-dash" style="display:none"></span></a>
@@ -26,81 +73,172 @@
 
   <div class="page-header">
     <div class="page-title">Ingest data</div>
-    <div class="page-sub">Pull from the NYC 311 Socrata API or upload a CSV file</div>
+    <div class="page-sub">Choose a data source, apply filters, then preview before passing to Clean</div>
   </div>
 
   <div id="alert-area"></div>
 
-  <!-- API source -->
-  <div class="card">
-    <div class="card-title"><div class="icon">API</div> Socrata API — NYC 311 Service Requests</div>
-    <div class="form-row">
-      <div class="field">
-        <label>Borough</label>
-        <select id="borough">
-          <option value="">All boroughs</option>
-          <option value="MANHATTAN">Manhattan</option>
-          <option value="BROOKLYN">Brooklyn</option>
-          <option value="QUEENS">Queens</option>
-          <option value="BRONX">Bronx</option>
-          <option value="STATEN ISLAND">Staten Island</option>
-        </select>
+  <!-- Source toggle -->
+  <div class="source-toggle">
+    <button class="source-btn active" id="btn-nyc" onclick="switchSource('nyc')">
+      NYC 311 Complaints
+    </button>
+    <button class="source-btn" id="btn-fda" onclick="switchSource('fda')">
+      FDA Adverse Events
+    </button>
+  </div>
+
+  <!-- NYC 311 Panel -->
+  <div class="source-panel active" id="panel-nyc">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon">API</div>
+        NYC 311 Service Requests
+        <span class="source-chip chip-nyc">Socrata · no auth required</span>
       </div>
-      <div class="field">
-        <label>Complaint type</label>
-        <select id="complaint">
-          <option value="">All types</option>
-          <option value="Noise - Residential">Noise - Residential</option>
-          <option value="HEAT/HOT WATER">Heat / Hot Water</option>
-          <option value="Illegal Parking">Illegal Parking</option>
-          <option value="Blocked Driveway">Blocked Driveway</option>
-          <option value="Street Light Condition">Street Light</option>
-          <option value="UNSANITARY CONDITION">Unsanitary Condition</option>
-          <option value="Request Large Bulky Item Collection">Bulky Item Collection</option>
-          <option value="Rodent">Rodent</option>
-          <option value="Damaged Tree">Damaged Tree</option>
-          <option value="Pothole">Pothole</option>
-        </select>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:16px">
+        Non-emergency service requests made to New York City. Each row is one complaint event with timestamp, complaint type, borough, zip code and coordinates.
+      </p>
+      <div class="form-row">
+        <div class="field">
+          <label>Borough</label>
+          <select id="nyc-borough">
+            <option value="">All boroughs</option>
+            <option value="MANHATTAN">Manhattan</option>
+            <option value="BROOKLYN">Brooklyn</option>
+            <option value="QUEENS">Queens</option>
+            <option value="BRONX">Bronx</option>
+            <option value="STATEN ISLAND">Staten Island</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Complaint type</label>
+          <select id="nyc-complaint">
+            <option value="">All types</option>
+            <option value="Noise - Residential">Noise - Residential</option>
+            <option value="HEAT/HOT WATER">Heat / Hot Water</option>
+            <option value="Illegal Parking">Illegal Parking</option>
+            <option value="Blocked Driveway">Blocked Driveway</option>
+            <option value="Street Light Condition">Street Light</option>
+            <option value="UNSANITARY CONDITION">Unsanitary Condition</option>
+            <option value="Rodent">Rodent</option>
+            <option value="Pothole">Pothole</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date from</label>
+          <input type="date" id="nyc-from" value="2024-01-01">
+        </div>
+        <div class="field">
+          <label>Date to</label>
+          <input type="date" id="nyc-to" value="2024-03-31">
+        </div>
+        <div class="field">
+          <label>Limit</label>
+          <select id="nyc-limit">
+            <option value="500">500 rows</option>
+            <option value="1000" selected>1,000 rows</option>
+            <option value="2000">2,000 rows</option>
+            <option value="5000">5,000 rows</option>
+          </select>
+        </div>
       </div>
-      <div class="field">
-        <label>Date from</label>
-        <input type="date" id="date-from" value="2024-01-01">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="fetchNYC()" id="nyc-btn">
+          <span id="nyc-icon">↓</span> Fetch from API
+        </button>
+        <span id="nyc-status" style="font-size:12px;color:var(--text2)"></span>
       </div>
-      <div class="field">
-        <label>Date to</label>
-        <input type="date" id="date-to" value="2024-03-31">
+      <div class="progress-wrap" id="nyc-progress" style="display:none">
+        <div class="progress-bar" id="nyc-bar" style="width:0%"></div>
       </div>
-      <div class="field">
-        <label>Limit</label>
-        <select id="limit">
-          <option value="500">500 rows</option>
-          <option value="1000" selected>1,000 rows</option>
-          <option value="2000">2,000 rows</option>
-          <option value="5000">5,000 rows</option>
-        </select>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="fetchAPI()" id="fetch-btn">
-        <span id="fetch-icon">↓</span> Fetch from API
-      </button>
-      <span id="fetch-status" style="font-size:12px;color:var(--text2)"></span>
-    </div>
-    <div class="progress-wrap" id="progress-wrap" style="display:none">
-      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
     </div>
   </div>
 
-  <!-- CSV source -->
+  <!-- FDA Panel -->
+  <div class="source-panel" id="panel-fda">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--success-light);color:var(--success)">API</div>
+        FDA Drug Adverse Event Reports (FAERS)
+        <span class="source-chip chip-fda">openFDA · no auth required</span>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:16px">
+        Adverse drug event reports submitted to the FDA since 2004. Each row is one report with drug name, patient reactions, outcome, patient demographics, and receive date.
+      </p>
+      <div class="form-row">
+        <div class="field">
+          <label>Drug name</label>
+          <input type="text" id="fda-drug" placeholder="e.g. aspirin, ibuprofen">
+        </div>
+        <div class="field">
+          <label>Reaction</label>
+          <input type="text" id="fda-reaction" placeholder="e.g. nausea, headache">
+        </div>
+        <div class="field">
+          <label>Outcome</label>
+          <select id="fda-outcome">
+            <option value="">Any outcome</option>
+            <option value="1">Recovered</option>
+            <option value="2">Recovering</option>
+            <option value="3">Not recovered</option>
+            <option value="4">Fatal</option>
+            <option value="5">Unknown</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Serious only</label>
+          <select id="fda-serious">
+            <option value="">Any</option>
+            <option value="1">Serious reports only</option>
+            <option value="2">Non-serious only</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date from</label>
+          <input type="date" id="fda-from" value="2023-01-01">
+        </div>
+        <div class="field">
+          <label>Date to</label>
+          <input type="date" id="fda-to" value="2023-12-31">
+        </div>
+        <div class="field">
+          <label>Limit</label>
+          <select id="fda-limit">
+            <option value="100">100 rows</option>
+            <option value="250" selected>250 rows</option>
+            <option value="500">500 rows</option>
+            <option value="1000">1,000 rows</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button class="btn btn-success" onclick="fetchFDA()" id="fda-btn">
+          <span id="fda-icon">↓</span> Fetch from API
+        </button>
+        <span id="fda-status" style="font-size:12px;color:var(--text2)"></span>
+      </div>
+      <div class="progress-wrap" id="fda-progress" style="display:none">
+        <div class="progress-bar" id="fda-bar" style="width:0%;background:var(--success)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV upload (shared) -->
   <div class="card">
-    <div class="card-title"><div class="icon">CSV</div> Upload CSV file</div>
-    <div id="drop-zone" style="border:2px dashed var(--border2);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:border-color .15s"
+    <div class="card-title">
+      <div class="icon">CSV</div>
+      Upload CSV file
+      <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px">works for either source</span>
+    </div>
+    <div id="drop-zone"
+         style="border:2px dashed var(--border2);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:border-color .15s"
          onclick="document.getElementById('csv-input').click()"
          ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
          ondragleave="this.style.borderColor='var(--border2)'"
          ondrop="handleDrop(event)">
       <div style="font-size:24px;margin-bottom:8px;opacity:.3">⬆</div>
-      <div style="font-size:13px;color:var(--text2)">Drop a CSV file here, or <strong style="color:var(--accent)">click to browse</strong></div>
+      <div style="font-size:13px;color:var(--text2)">Drop a CSV here, or <strong style="color:var(--accent)">click to browse</strong></div>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">Any CSV with headers — field mapping is automatic</div>
     </div>
     <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSV(this.files[0])">
@@ -108,7 +246,7 @@
 
   <!-- Preview -->
   <div class="card" id="preview-card" style="display:none">
-    <div class="card-title"><div class="icon">👁</div> Preview — <span id="preview-count"></span> rows loaded</div>
+    <div class="card-title"><div class="icon">👁</div> Preview — <span id="preview-count"></span> rows</div>
     <div id="preview-info" style="margin-bottom:12px"></div>
     <div class="table-wrap">
       <table id="preview-table"></table>
@@ -122,15 +260,36 @@
 
 <script src="js/app.js"></script>
 <script>
-  const ENDPOINT = 'https://data.cityofnewyork.us/resource/erm2-nwe9.json';
-  const FIELDS = ['unique_key','created_date','complaint_type','descriptor','incident_zip','borough','status','agency','latitude','longitude','closed_date'];
+  let activeSource = 'nyc';
+  let pendingData  = [];
 
-  let pendingData = [];
+  function switchSource(src) {
+    activeSource = src;
+    document.getElementById('panel-nyc').classList.toggle('active', src === 'nyc');
+    document.getElementById('panel-fda').classList.toggle('active', src === 'fda');
+    document.getElementById('btn-nyc').classList.toggle('active',  src === 'nyc');
+    document.getElementById('btn-fda').classList.toggle('active',  src === 'fda');
+    clearPreview();
+  }
 
-  function setStatus(msg, spin) {
-    document.getElementById('fetch-status').textContent = msg;
-    document.getElementById('fetch-icon').innerHTML = spin ? '<span class="spinner" style="width:14px;height:14px;border-width:1.5px"></span>' : '↓';
-    document.getElementById('fetch-btn').disabled = !!spin;
+  function setFetchState(src, busy, msg) {
+    document.getElementById(`${src}-icon`).innerHTML = busy
+      ? '<span class="spinner" style="width:14px;height:14px;border-width:1.5px"></span>' : '↓';
+    document.getElementById(`${src}-btn`).disabled = busy;
+    document.getElementById(`${src}-status`).textContent = msg;
+    document.getElementById(`${src}-progress`).style.display = busy ? 'block' : 'none';
+    if (!busy) setTimeout(() => document.getElementById(`${src}-bar`).style.width = '0%', 600);
+  }
+
+  function animateProgress(barId, from, to, ms) {
+    const bar = document.getElementById(barId);
+    const t0  = Date.now();
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - t0) / ms);
+      bar.style.width = (from + (to - from) * p) + '%';
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    tick();
   }
 
   function showAlert(msg, type) {
@@ -139,53 +298,103 @@
     setTimeout(() => document.getElementById('alert-area').innerHTML = '', 5000);
   }
 
-  async function fetchAPI() {
-    const borough   = document.getElementById('borough').value;
-    const complaint = document.getElementById('complaint').value;
-    const from      = document.getElementById('date-from').value;
-    const to        = document.getElementById('date-to').value;
-    const limit     = document.getElementById('limit').value;
+  // ── NYC 311 ───────────────────────────────────────────────
+  const NYC_ENDPOINT = 'https://data.cityofnewyork.us/resource/erm2-nwe9.json';
+  const NYC_FIELDS   = ['unique_key','created_date','complaint_type','descriptor','incident_zip','borough','status','agency','latitude','longitude','closed_date'];
+
+  async function fetchNYC() {
+    const borough   = document.getElementById('nyc-borough').value;
+    const complaint = document.getElementById('nyc-complaint').value;
+    const from      = document.getElementById('nyc-from').value;
+    const to        = document.getElementById('nyc-to').value;
+    const limit     = document.getElementById('nyc-limit').value;
 
     let where = `created_date >= '${from}T00:00:00' AND created_date <= '${to}T23:59:59'`;
     if (borough)   where += ` AND borough='${borough}'`;
     if (complaint) where += ` AND complaint_type='${complaint.replace(/'/g, "''")}'`;
 
-    const url = `${ENDPOINT}?$select=${FIELDS.join(',')}&$where=${encodeURIComponent(where)}&$order=created_date DESC&$limit=${limit}`;
+    const url = `${NYC_ENDPOINT}?$select=${NYC_FIELDS.join(',')}&$where=${encodeURIComponent(where)}&$order=created_date DESC&$limit=${limit}`;
 
-    setStatus('Fetching…', true);
-    document.getElementById('progress-wrap').style.display = 'block';
-    animateProgress(0, 60, 1200);
-
+    setFetchState('nyc', true, 'Fetching…');
+    animateProgress('nyc-bar', 0, 70, 1500);
     try {
-      const res = await fetch(url);
+      const res  = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      animateProgress(60, 100, 400);
-      setTimeout(() => {
-        document.getElementById('progress-wrap').style.display = 'none';
-        document.getElementById('progress-bar').style.width = '0%';
-      }, 600);
-      setStatus(`${data.length.toLocaleString()} rows fetched`, false);
+      animateProgress('nyc-bar', 70, 100, 300);
+      setFetchState('nyc', false, `${data.length.toLocaleString()} rows fetched`);
       pendingData = data;
-      showPreview(data, 'api');
+      showPreview(data, 'nyc');
     } catch(e) {
-      setStatus('', false);
-      document.getElementById('progress-wrap').style.display = 'none';
+      setFetchState('nyc', false, '');
       showAlert(`Fetch failed: ${e.message}`, 'error');
     }
   }
 
-  function animateProgress(from, to, ms) {
-    const bar = document.getElementById('progress-bar');
-    const start = Date.now();
-    const tick = () => {
-      const p = Math.min(1, (Date.now() - start) / ms);
-      bar.style.width = (from + (to - from) * p) + '%';
-      if (p < 1) requestAnimationFrame(tick);
-    };
-    tick();
+  // ── FDA Adverse Events ────────────────────────────────────
+  const FDA_ENDPOINT = 'https://api.fda.gov/drug/event.json';
+
+  async function fetchFDA() {
+    const drug     = document.getElementById('fda-drug').value.trim();
+    const reaction = document.getElementById('fda-reaction').value.trim();
+    const outcome  = document.getElementById('fda-outcome').value;
+    const serious  = document.getElementById('fda-serious').value;
+    const from     = document.getElementById('fda-from').value.replace(/-/g,'');
+    const to       = document.getElementById('fda-to').value.replace(/-/g,'');
+    const limit    = document.getElementById('fda-limit').value;
+
+    const terms = [`receivedate:[${from}+TO+${to}]`];
+    if (drug)     terms.push(`patient.drug.openfda.generic_name:"${drug}"`);
+    if (reaction) terms.push(`patient.reaction.reactionmeddrapt:"${reaction}"`);
+    if (outcome)  terms.push(`patient.reaction.reactionoutcome:${outcome}`);
+    if (serious)  terms.push(`serious:${serious}`);
+
+    const url = `${FDA_ENDPOINT}?search=${terms.join('+AND+')}&limit=${limit}`;
+
+    setFetchState('fda', true, 'Fetching…');
+    animateProgress('fda-bar', 0, 70, 1500);
+    try {
+      const res  = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      const data = (json.results || []).map(flattenFDA);
+      animateProgress('fda-bar', 70, 100, 300);
+      setFetchState('fda', false, `${data.length.toLocaleString()} rows fetched`);
+      pendingData = data;
+      showPreview(data, 'fda');
+    } catch(e) {
+      setFetchState('fda', false, '');
+      showAlert(`Fetch failed: ${e.message}`, 'error');
+    }
   }
 
+  function flattenFDA(r) {
+    const drug      = (r.patient?.drug || [])[0] || {};
+    const reactions = (r.patient?.reaction || []).map(rx => rx.reactionmeddrapt).filter(Boolean).join('; ');
+    const outcomes  = {'1':'Recovered','2':'Recovering','3':'Not recovered','4':'Fatal','5':'Unknown','6':'Unknown'};
+    const outcome   = (r.patient?.reaction || [])[0]?.reactionoutcome;
+    const date      = r.receivedate || '';
+    return {
+      report_id:       r.safetyreportid || '',
+      receive_date:    date.length === 8 ? `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}` : date,
+      serious:         r.serious === '1' ? 'Yes' : 'No',
+      country:         r.occurcountry || '',
+      drug_name:       drug.openfda?.generic_name?.[0] || drug.medicinalproduct || '',
+      drug_brand:      drug.openfda?.brand_name?.[0]   || '',
+      drug_route:      drug.openfda?.route?.[0]        || '',
+      drug_indication: drug.drugindication             || '',
+      patient_age:     r.patient?.patientonsetage      || '',
+      patient_sex:     r.patient?.patientsex === '1' ? 'Male' : r.patient?.patientsex === '2' ? 'Female' : '',
+      patient_weight:  r.patient?.patientweight        || '',
+      reactions:       reactions,
+      outcome:         outcomes[outcome]               || '',
+    };
+  }
+
+  // ── CSV ───────────────────────────────────────────────────
   function handleDrop(e) {
     e.preventDefault();
     document.getElementById('drop-zone').style.borderColor = 'var(--border2)';
@@ -194,55 +403,48 @@
   }
 
   function handleCSV(file) {
-    if (!file || !file.name.endsWith('.csv')) {
-      showAlert('Please upload a .csv file', 'error'); return;
-    }
+    if (!file || !file.name.endsWith('.csv')) { showAlert('Please upload a .csv file', 'error'); return; }
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const rows = parseCSV(e.target.result);
-        pendingData = rows;
-        showPreview(rows, 'csv');
-      } catch(err) {
-        showAlert('CSV parse error: ' + err.message, 'error');
-      }
+        pendingData = parseCSV(e.target.result);
+        showPreview(pendingData, 'csv');
+      } catch(err) { showAlert('CSV parse error: ' + err.message, 'error'); }
     };
     reader.readAsText(file);
   }
 
   function parseCSV(text) {
-    const lines = text.trim().split('\n');
+    const lines   = text.trim().split('\n');
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,'').toLowerCase().replace(/ /g,'_'));
     return lines.slice(1).map(line => {
       const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,))/g) || [];
-      const obj = {};
-      headers.forEach((h, i) => {
-        obj[h] = (vals[i] || '').replace(/^"|"$/g, '').trim();
-      });
+      const obj  = {};
+      headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/^"|"$/g,'').trim(); });
       return obj;
     }).filter(r => Object.values(r).some(v => v));
   }
 
+  // ── Preview & commit ──────────────────────────────────────
   function showPreview(data, source) {
     if (!data.length) { showAlert('No data rows found', 'warning'); return; }
-    const cols = Object.keys(data[0]);
+    const cols   = Object.keys(data[0]);
     const sample = data.slice(0, 8);
+    const labels = { nyc:['NYC 311','tag-blue'], fda:['FDA FAERS','tag-green'], csv:['CSV upload','tag-gray'] };
+    const [label, cls] = labels[source] || ['Data','tag-gray'];
 
     document.getElementById('preview-count').textContent = data.length.toLocaleString();
     document.getElementById('preview-info').innerHTML =
       `<div style="display:flex;gap:8px;flex-wrap:wrap">
-        <span class="tag ${source==='api'?'tag-blue':'tag-green'}">${source === 'api' ? 'API' : 'CSV'}</span>
+        <span class="tag ${cls}">${label}</span>
         <span class="tag tag-gray">${cols.length} columns</span>
         <span class="tag tag-gray">${data.length.toLocaleString()} rows</span>
       </div>`;
-
-    const thead = `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
-    const tbody = `<tbody>${sample.map(r =>
-      `<tr>${cols.map(c => `<td title="${r[c]||''}">${r[c]||'<span style="color:var(--text3)">null</span>'}</td>`).join('')}</tr>`
-    ).join('')}</tbody>`;
-    document.getElementById('preview-table').innerHTML = thead + tbody;
+    document.getElementById('preview-table').innerHTML =
+      `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+       <tbody>${sample.map(r=>`<tr>${cols.map(c=>`<td title="${r[c]||''}">${r[c]||'<span style="color:var(--text3)">null</span>'}</td>`).join('')}</tr>`).join('')}</tbody>`;
     document.getElementById('preview-card').style.display = 'block';
-    document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('preview-card').scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
 
   function clearPreview() {
@@ -253,7 +455,7 @@
   function commitData() {
     if (!pendingData.length) return;
     App.saveRaw(pendingData);
-    App.saveMeta({ source: 'api', fetchedAt: new Date().toISOString(), count: pendingData.length });
+    App.saveMeta({ source: activeSource, fetchedAt: new Date().toISOString(), count: pendingData.length });
     showAlert(`${pendingData.length.toLocaleString()} rows saved — redirecting to Clean…`, 'success');
     setTimeout(() => window.location.href = 'clean.html', 1200);
   }
