@@ -3,21 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — NYC 311 ETL</title>
+<title>Dashboard — ETL Pipeline</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   #map { height: 400px; border-radius: var(--radius); overflow: hidden; }
   .chart-wrap { position: relative; height: 260px; }
   .filter-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
-  .dl-row { display:flex; gap:8px; flex-wrap:wrap; }
-  .leaflet-container { font-family: inherit; }
+  .source-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 500;
+  }
+  .badge-nyc { background:#eff6ff; color:#2563eb; border:0.5px solid #bfdbfe; }
+  .badge-fda { background:#f0fdf4; color:#16a34a; border:0.5px solid #bbf7d0; }
+  .badge-csv { background:var(--surface2); color:var(--text2); border:0.5px solid var(--border2); }
 </style>
 </head>
 <body>
 
 <nav class="nav">
-  <a class="nav-brand" href="index.html">NYC <span>311</span> ETL</a>
+  <a class="nav-brand" href="index.html">ETL <span>Pipeline</span></a>
   <a href="ingest.html">Ingest</a>
   <a href="clean.html">Clean <span class="nav-badge" id="badge-raw"></span></a>
   <a href="dashboard.html" class="active">Dashboard <span class="nav-badge" id="badge-dash"></span></a>
@@ -38,76 +43,67 @@
 
   <div id="main" style="display:none">
 
-    <!-- Header + export -->
+    <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-      <div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="page-title" id="dash-title">Dashboard</div>
-        <div class="page-sub" id="dash-sub"></div>
+        <span id="source-badge"></span>
       </div>
-      <div class="dl-row">
-        <button class="btn" onclick="exportCSV()">↓ Export CSV</button>
-        <button class="btn" onclick="exportJSON()">↓ Export JSON</button>
-        <button class="btn btn-primary" onclick="saveAirtable()" id="at-btn">↑ Save to Airtable</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="exportCSV()">↓ CSV</button>
+        <button class="btn" onclick="exportJSON()">↓ JSON</button>
+        <button class="btn btn-primary" onclick="openATModal()">↑ Save to Airtable</button>
       </div>
     </div>
+
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px" id="dash-sub"></div>
 
     <!-- Filters -->
     <div class="card">
       <div class="card-title"><div class="icon">⊞</div> Filters</div>
-      <div class="filter-bar">
-        <div class="field">
-          <label>Borough</label>
-          <select id="f-borough" onchange="applyFilters()">
-            <option value="">All boroughs</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Complaint type</label>
-          <select id="f-complaint" onchange="applyFilters()">
-            <option value="">All types</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Status</label>
-          <select id="f-status" onchange="applyFilters()">
-            <option value="">All statuses</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Search</label>
-          <input type="text" id="f-search" placeholder="Search any field…" oninput="applyFilters()">
-        </div>
-        <button class="btn" onclick="clearFilters()">Clear</button>
-      </div>
+      <div class="filter-bar" id="filter-bar"></div>
       <div style="font-size:12px;color:var(--text2)" id="filter-count"></div>
     </div>
 
     <!-- KPIs -->
     <div class="kpi-grid" id="kpi-grid"></div>
 
-    <!-- Charts row -->
+    <!-- Charts -->
     <div class="dash-grid" style="margin-bottom:16px">
       <div class="card">
-        <div class="card-title"><div class="icon">▦</div> Complaints by type (top 10)</div>
+        <div class="card-title"><div class="icon">▦</div> <span id="bar-title">Top categories</span></div>
         <div class="chart-wrap"><canvas id="chart-bar"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title"><div class="icon">◎</div> Complaints by borough</div>
+        <div class="card-title"><div class="icon">◎</div> <span id="donut-title">Distribution</span></div>
         <div class="chart-wrap"><canvas id="chart-donut"></canvas></div>
       </div>
     </div>
 
-    <!-- Line chart -->
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title"><div class="icon">↗</div> Complaints over time (daily)</div>
+      <div class="card-title"><div class="icon">↗</div> <span id="line-title">Events over time</span></div>
       <div style="position:relative;height:200px"><canvas id="chart-line"></canvas></div>
     </div>
 
-    <!-- Map -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title"><div class="icon">◉</div> Zip code map <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:4px">(circle size = complaint count)</span></div>
+    <!-- Map (NYC only) -->
+    <div class="card" id="map-card" style="margin-bottom:16px">
+      <div class="card-title"><div class="icon">◉</div> Zip code map <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:4px">(circle size = count)</span></div>
       <div id="map"></div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px" id="map-note"></div>
+    </div>
+
+    <!-- FDA summary cards (FDA only) -->
+    <div id="fda-cards" style="display:none;margin-bottom:16px">
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-title"><div class="icon" style="background:var(--success-light);color:var(--success)">Rx</div> Top drugs reported</div>
+          <div id="fda-drugs" style="font-size:13px;line-height:2"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><div class="icon" style="background:var(--danger-light);color:var(--danger)">⚠</div> Top reactions</div>
+          <div id="fda-reactions" style="font-size:13px;line-height:2"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Data table -->
@@ -122,12 +118,11 @@
         <button class="btn" onclick="nextPage()" id="btn-next">Next →</button>
       </div>
     </div>
-
   </div>
 </div>
 
 <!-- Airtable modal -->
-<div id="at-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center">
+<div id="at-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center">
   <div style="background:var(--surface);border-radius:var(--radius-lg);padding:24px;max-width:440px;width:90%;border:0.5px solid var(--border2)">
     <div style="font-size:15px;font-weight:600;margin-bottom:16px">Save to Airtable</div>
     <div class="field" style="margin-bottom:10px">
@@ -158,58 +153,121 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/app.js"></script>
 <script>
-  let allData = [], filtered = [], map = null;
-  let barChart, donutChart, lineChart;
+  let allData = [], filtered = [], source = 'nyc';
+  let leafletMap = null, barChart, donutChart, lineChart;
   let page = 0;
   const PAGE_SIZE = 50;
-
-  // ── Chart colour palette ──────────────────────────────────
   const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#6366f1'];
 
+  // ── Source detection ──────────────────────────────────────
+  function detectSource(data) {
+    if (!data || !data.length) return 'csv';
+    const keys = Object.keys(data[0]);
+    if (keys.includes('unique_key') || keys.includes('complaint_type')) return 'nyc';
+    if (keys.includes('report_id')  || keys.includes('drug_name'))      return 'fda';
+    return 'csv';
+  }
+
+  // ── Init ──────────────────────────────────────────────────
   function init() {
     const data = App.loadClean();
-    if (!data || !data.length) {
-      document.getElementById('no-data').style.display = 'block';
-      return;
-    }
+    if (!data || !data.length) { document.getElementById('no-data').style.display = 'block'; return; }
     allData = data;
     filtered = [...allData];
+    source  = App.loadMeta()?.source || detectSource(allData);
     document.getElementById('main').style.display = 'block';
+
+    // Source badge
+    const badges = { nyc: ['NYC 311','badge-nyc'], fda: ['FDA FAERS','badge-fda'], csv: ['CSV','badge-csv'] };
+    const [label, cls] = badges[source] || ['Data','badge-csv'];
+    document.getElementById('source-badge').innerHTML = `<span class="source-badge ${cls}">${label}</span>`;
+    document.getElementById('dash-title').textContent = source === 'fda' ? 'FDA Adverse Events Dashboard' : source === 'nyc' ? 'NYC 311 Dashboard' : 'Data Dashboard';
 
     const meta = App.loadMeta() || {};
     document.getElementById('dash-sub').textContent =
       `${allData.length.toLocaleString()} clean records · fetched ${meta.fetchedAt ? App.fmtDate(meta.fetchedAt) : 'recently'}`;
 
-    populateFilters();
+    // Pre-fill Airtable table name based on source
+    document.getElementById('at-table').value = source === 'fda' ? 'FDA Adverse Events' : '311 Requests';
+
+    // Show/hide map and FDA cards
+    document.getElementById('map-card').style.display  = source === 'nyc' ? 'block' : 'none';
+    document.getElementById('fda-cards').style.display = source === 'fda' ? 'block' : 'none';
+
+    buildFilters();
     render();
   }
 
-  function populateFilters() {
-    const uniq = (field) => [...new Set(allData.map(r => r[field]).filter(Boolean))].sort();
-    const fill = (id, vals) => {
-      const el = document.getElementById(id);
-      vals.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; el.appendChild(o); });
-    };
-    fill('f-borough',   uniq('borough'));
-    fill('f-complaint', uniq('complaint_type'));
-    fill('f-status',    uniq('status'));
+  // ── Filters ───────────────────────────────────────────────
+  function buildFilters() {
+    const bar = document.getElementById('filter-bar');
+    const uniq = f => [...new Set(allData.map(r => r[f]).filter(Boolean))].sort();
+
+    let html = '';
+    if (source === 'nyc') {
+      html += filterSelect('f-borough',   'Borough',        uniq('borough'));
+      html += filterSelect('f-complaint', 'Complaint type', uniq('complaint_type'));
+      html += filterSelect('f-status',    'Status',         uniq('status'));
+    } else if (source === 'fda') {
+      html += filterSelect('f-serious',  'Serious',     uniq('serious'));
+      html += filterSelect('f-outcome',  'Outcome',     uniq('outcome'));
+      html += filterSelect('f-country',  'Country',     uniq('country').slice(0, 30));
+      html += filterSelect('f-sex',      'Patient sex', uniq('patient_sex'));
+    } else {
+      // Generic: first 3 string columns with < 40 unique values
+      const cols = Object.keys(allData[0] || {});
+      let added = 0;
+      for (const col of cols) {
+        const vals = uniq(col);
+        if (vals.length > 1 && vals.length <= 40 && added < 3) {
+          html += filterSelect(`f-${col}`, col, vals);
+          added++;
+        }
+      }
+    }
+    html += `<div class="field"><label>Search</label><input type="text" id="f-search" placeholder="Search any field…" oninput="applyFilters()"></div>`;
+    html += `<button class="btn" onclick="clearFilters()" style="align-self:flex-end">Clear</button>`;
+    bar.innerHTML = html;
+
+    // Attach onchange to all selects
+    bar.querySelectorAll('select').forEach(s => s.addEventListener('change', applyFilters));
+  }
+
+  function filterSelect(id, label, options) {
+    return `<div class="field"><label>${label}</label>
+      <select id="${id}">
+        <option value="">All</option>
+        ${options.map(v => `<option value="${v}">${v}</option>`).join('')}
+      </select></div>`;
   }
 
   function applyFilters() {
-    const borough   = document.getElementById('f-borough').value;
-    const complaint = document.getElementById('f-complaint').value;
-    const status    = document.getElementById('f-status').value;
-    const search    = document.getElementById('f-search').value.toLowerCase();
+    const search = (document.getElementById('f-search')?.value || '').toLowerCase();
+
     filtered = allData.filter(r => {
-      if (borough   && r.borough       !== borough)   return false;
-      if (complaint && r.complaint_type !== complaint) return false;
-      if (status    && r.status        !== status)    return false;
-      if (search) {
-        const row = Object.values(r).join(' ').toLowerCase();
-        if (!row.includes(search)) return false;
+      // Source-specific filters
+      if (source === 'nyc') {
+        const b = document.getElementById('f-borough')?.value;
+        const c = document.getElementById('f-complaint')?.value;
+        const s = document.getElementById('f-status')?.value;
+        if (b && r.borough       !== b) return false;
+        if (c && r.complaint_type !== c) return false;
+        if (s && r.status        !== s) return false;
+      } else if (source === 'fda') {
+        const sr = document.getElementById('f-serious')?.value;
+        const oc = document.getElementById('f-outcome')?.value;
+        const co = document.getElementById('f-country')?.value;
+        const sx = document.getElementById('f-sex')?.value;
+        if (sr && r.serious     !== sr) return false;
+        if (oc && r.outcome     !== oc) return false;
+        if (co && r.country     !== co) return false;
+        if (sx && r.patient_sex !== sx) return false;
       }
+      // Search
+      if (search && !Object.values(r).join(' ').toLowerCase().includes(search)) return false;
       return true;
     });
+
     page = 0;
     document.getElementById('filter-count').textContent =
       `Showing ${filtered.length.toLocaleString()} of ${allData.length.toLocaleString()} rows`;
@@ -217,41 +275,66 @@
   }
 
   function clearFilters() {
-    ['f-borough','f-complaint','f-status'].forEach(id => document.getElementById(id).value = '');
+    document.querySelectorAll('#filter-bar select').forEach(s => s.value = '');
     document.getElementById('f-search').value = '';
     applyFilters();
   }
 
+  // ── Render all ────────────────────────────────────────────
   function render() {
     renderKPIs();
     renderBarChart();
     renderDonutChart();
     renderLineChart();
-    renderMap();
+    if (source === 'nyc') renderMap();
+    if (source === 'fda') renderFDACards();
     renderTable();
   }
 
-  // ── KPIs ─────────────────────────────────────────────────
+  // ── KPIs ──────────────────────────────────────────────────
   function renderKPIs() {
     const total = filtered.length;
-    const closed = filtered.filter(r => (r.status||'').toLowerCase().includes('closed')).length;
-    const closedPct = total ? Math.round(closed / total * 100) : 0;
-    const topComplaint = topValue(filtered, 'complaint_type');
-    const topBorough   = topValue(filtered, 'borough');
-    const uniqueZips   = new Set(filtered.map(r => r.incident_zip).filter(Boolean)).size;
+    let cards = [];
 
-    document.getElementById('kpi-grid').innerHTML = [
-      kpi(App.fmt(total),         'Total records',        ''),
-      kpi(`${closedPct}%`,        'Cases closed',         closedPct >= 70 ? 'up' : 'down', `${App.fmt(closed)} closed`),
-      kpi(topComplaint || '—',    'Top complaint type',   ''),
-      kpi(topBorough   || '—',    'Busiest borough',      ''),
-      kpi(App.fmt(uniqueZips),    'Unique zip codes',     ''),
-    ].join('');
+    if (source === 'nyc') {
+      const closed    = filtered.filter(r => (r.status||'').toLowerCase().includes('closed')).length;
+      const closedPct = total ? Math.round(closed / total * 100) : 0;
+      const uniqueZips = new Set(filtered.map(r => r.incident_zip).filter(Boolean)).size;
+      cards = [
+        kpi(App.fmt(total),                 'Total complaints',    ''),
+        kpi(`${closedPct}%`,                'Cases closed',        closedPct >= 70 ? 'up' : 'down', `${App.fmt(closed)} closed`),
+        kpi(topValue(filtered,'complaint_type') || '—', 'Top complaint',  ''),
+        kpi(topValue(filtered,'borough')    || '—', 'Busiest borough',   ''),
+        kpi(App.fmt(uniqueZips),            'Unique zip codes',    ''),
+      ];
+    } else if (source === 'fda') {
+      const serious   = filtered.filter(r => r.serious === 'Yes').length;
+      const seriousPct = total ? Math.round(serious / total * 100) : 0;
+      const fatal     = filtered.filter(r => (r.outcome||'').toLowerCase() === 'fatal').length;
+      const uniqueDrugs = new Set(filtered.map(r => r.drug_name).filter(Boolean)).size;
+      const countries   = new Set(filtered.map(r => r.country).filter(Boolean)).size;
+      cards = [
+        kpi(App.fmt(total),       'Total reports',     ''),
+        kpi(`${seriousPct}%`,     'Serious reports',   seriousPct > 50 ? 'down' : 'up', `${App.fmt(serious)} reports`),
+        kpi(App.fmt(fatal),       'Fatal outcomes',    fatal > 0 ? 'down' : ''),
+        kpi(App.fmt(uniqueDrugs), 'Unique drugs',      ''),
+        kpi(App.fmt(countries),   'Countries reported',''),
+      ];
+    } else {
+      const cols = Object.keys(allData[0] || {});
+      cards = [
+        kpi(App.fmt(total), 'Total rows', ''),
+        kpi(App.fmt(cols.length), 'Columns', ''),
+        kpi(App.fmt(allData.length - filtered.length), 'Filtered out', ''),
+      ];
+    }
+
+    document.getElementById('kpi-grid').innerHTML = cards.join('');
   }
 
   function kpi(val, label, delta, sub) {
     return `<div class="kpi">
-      <div class="kpi-value" style="font-size:${val.length > 12 ? '16px' : val.length > 8 ? '20px' : '28px'}">${val}</div>
+      <div class="kpi-value" style="font-size:${val.length>12?'15px':val.length>8?'20px':'28px'}">${val}</div>
       <div class="kpi-label">${label}</div>
       ${sub ? `<div class="kpi-delta ${delta}">${sub}</div>` : ''}
     </div>`;
@@ -259,35 +342,37 @@
 
   function topValue(data, field) {
     const counts = {};
-    data.forEach(r => { if (r[field]) counts[r[field]] = (counts[r[field]] || 0) + 1; });
-    return Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
+    data.forEach(r => { if (r[field]) counts[r[field]] = (counts[r[field]]||0)+1; });
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0] || null;
   }
 
   function countBy(data, field) {
     const counts = {};
-    data.forEach(r => { if (r[field]) counts[r[field]] = (counts[r[field]] || 0) + 1; });
-    return Object.entries(counts).sort((a,b) => b[1]-a[1]);
+    data.forEach(r => { if (r[field]) counts[r[field]] = (counts[r[field]]||0)+1; });
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   }
 
   // ── Bar chart ─────────────────────────────────────────────
   function renderBarChart() {
-    const entries = countBy(filtered, 'complaint_type').slice(0, 10);
-    const labels  = entries.map(([k]) => k.length > 22 ? k.slice(0,20)+'…' : k);
-    const values  = entries.map(([,v]) => v);
+    const field = source === 'fda' ? 'drug_name' : source === 'nyc' ? 'complaint_type' : Object.keys(allData[0]||{})[1];
+    const title = source === 'fda' ? 'Top drugs (adverse events)' : source === 'nyc' ? 'Complaints by type (top 10)' : `Top values: ${field}`;
+    document.getElementById('bar-title').textContent = title;
+
+    const entries = countBy(filtered, field).slice(0, 10);
     const ctx = document.getElementById('chart-bar').getContext('2d');
     if (barChart) barChart.destroy();
     barChart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels,
-        datasets: [{ data: values, backgroundColor: PALETTE[0], borderRadius: 4, borderSkipped: false }]
+        labels: entries.map(([k]) => k.length > 22 ? k.slice(0,20)+'…' : k),
+        datasets: [{ data: entries.map(([,v])=>v), backgroundColor: source==='fda'?PALETTE[1]:PALETTE[0], borderRadius:4, borderSkipped:false }]
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, maxRotation: 35 }, grid: { display: false } },
-          y: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.05)' } }
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ ticks:{ font:{size:10}, maxRotation:35 }, grid:{ display:false } },
+          y:{ ticks:{ font:{size:11} }, grid:{ color:'rgba(0,0,0,.05)' } }
         }
       }
     });
@@ -295,95 +380,118 @@
 
   // ── Donut chart ───────────────────────────────────────────
   function renderDonutChart() {
-    const entries = countBy(filtered, 'borough').slice(0, 8);
+    const field = source === 'fda' ? 'outcome' : source === 'nyc' ? 'borough' : Object.keys(allData[0]||{})[2];
+    const title = source === 'fda' ? 'Outcomes' : source === 'nyc' ? 'Complaints by borough' : `Distribution: ${field}`;
+    document.getElementById('donut-title').textContent = title;
+
+    const entries = countBy(filtered, field).slice(0, 8);
     const ctx = document.getElementById('chart-donut').getContext('2d');
     if (donutChart) donutChart.destroy();
     donutChart = new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: entries.map(([k]) => k),
-        datasets: [{ data: entries.map(([,v]) => v), backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }]
+        labels: entries.map(([k])=>k),
+        datasets:[{ data:entries.map(([,v])=>v), backgroundColor:PALETTE, borderWidth:2, borderColor:'#fff' }]
       },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } } }
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'right', labels:{ font:{size:11}, boxWidth:12 } } }
       }
     });
   }
 
   // ── Line chart ────────────────────────────────────────────
   function renderLineChart() {
+    const dateField = source === 'fda' ? 'receive_date' : 'created_date';
+    const title     = source === 'fda' ? 'Reports received over time' : 'Complaints over time (daily)';
+    document.getElementById('line-title').textContent = title;
+
     const byDay = {};
     filtered.forEach(r => {
-      if (!r.created_date) return;
-      const day = r.created_date.split('T')[0];
-      if (day) byDay[day] = (byDay[day] || 0) + 1;
+      const raw = r[dateField] || '';
+      const day = raw.includes('T') ? raw.split('T')[0] : raw.slice(0,10);
+      if (day && day.length === 10) byDay[day] = (byDay[day]||0)+1;
     });
-    const sorted = Object.entries(byDay).sort((a,b) => a[0].localeCompare(b[0]));
+    const sorted = Object.entries(byDay).sort((a,b)=>a[0].localeCompare(b[0]));
+    const color  = source === 'fda' ? '#16a34a' : '#2563eb';
+    const fill   = source === 'fda' ? 'rgba(22,163,74,.08)' : 'rgba(37,99,235,.08)';
+
     const ctx = document.getElementById('chart-line').getContext('2d');
     if (lineChart) lineChart.destroy();
     lineChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: sorted.map(([d]) => d),
-        datasets: [{
-          data: sorted.map(([,v]) => v),
-          borderColor: PALETTE[0], backgroundColor: 'rgba(37,99,235,.08)',
-          borderWidth: 1.5, pointRadius: sorted.length > 60 ? 0 : 3,
-          fill: true, tension: 0.3
-        }]
+      type:'line',
+      data:{
+        labels: sorted.map(([d])=>d),
+        datasets:[{ data:sorted.map(([,v])=>v), borderColor:color, backgroundColor:fill, borderWidth:1.5, pointRadius:sorted.length>60?0:3, fill:true, tension:0.3 }]
       },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, maxTicksLimit: 12 }, grid: { display: false } },
-          y: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.05)' } }
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ ticks:{ font:{size:10}, maxTicksLimit:12 }, grid:{ display:false } },
+          y:{ ticks:{ font:{size:11} }, grid:{ color:'rgba(0,0,0,.05)' } }
         }
       }
     });
   }
 
-  // ── Map ───────────────────────────────────────────────────
+  // ── NYC Map ───────────────────────────────────────────────
   function renderMap() {
-    if (!map) {
-      map = L.map('map').setView([40.7128, -74.006], 11);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap © CartoDB', subdomains: 'abcd', maxZoom: 18
-      }).addTo(map);
+    if (!leafletMap) {
+      leafletMap = L.map('map').setView([40.7128,-74.006],11);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+        attribution:'© OpenStreetMap © CartoDB', subdomains:'abcd', maxZoom:18
+      }).addTo(leafletMap);
     }
-    map.eachLayer(l => { if (l instanceof L.CircleMarker) map.removeLayer(l); });
+    leafletMap.eachLayer(l => { if (l instanceof L.CircleMarker) leafletMap.removeLayer(l); });
 
-    // Group by zip
-    const zipCounts = {};
-    const zipCoords = {};
+    const zipCounts = {}, zipCoords = {};
     filtered.forEach(r => {
       const zip = r.incident_zip;
       const lat = parseFloat(r.latitude), lng = parseFloat(r.longitude);
       if (!zip || isNaN(lat) || isNaN(lng)) return;
-      zipCounts[zip] = (zipCounts[zip] || 0) + 1;
-      if (!zipCoords[zip]) zipCoords[zip] = { lat: 0, lng: 0, n: 0 };
+      zipCounts[zip] = (zipCounts[zip]||0)+1;
+      if (!zipCoords[zip]) zipCoords[zip] = { lat:0, lng:0, n:0 };
       zipCoords[zip].lat += lat; zipCoords[zip].lng += lng; zipCoords[zip].n++;
     });
 
-    const counts = Object.values(zipCounts);
-    const maxCount = Math.max(...counts, 1);
-
+    const max = Math.max(...Object.values(zipCounts), 1);
     Object.entries(zipCounts).forEach(([zip, count]) => {
-      const c = zipCoords[zip];
-      if (!c) return;
-      const lat = c.lat / c.n, lng = c.lng / c.n;
-      const r = 5 + (count / maxCount) * 25;
-      const opacity = 0.35 + (count / maxCount) * 0.45;
-      L.circleMarker([lat, lng], {
-        radius: r, color: '#2563eb', fillColor: '#2563eb',
-        fillOpacity: opacity, weight: 1
-      }).bindPopup(`<strong>ZIP ${zip}</strong><br>${count.toLocaleString()} complaints`).addTo(map);
+      const c = zipCoords[zip]; if (!c) return;
+      L.circleMarker([c.lat/c.n, c.lng/c.n], {
+        radius: 5 + (count/max)*25,
+        color:'#2563eb', fillColor:'#2563eb',
+        fillOpacity: 0.35 + (count/max)*0.45, weight:1
+      }).bindPopup(`<strong>ZIP ${zip}</strong><br>${count.toLocaleString()} complaints`).addTo(leafletMap);
     });
 
-    const shown = Object.keys(zipCounts).length;
     document.getElementById('map-note').textContent =
-      `${shown} zip codes with ${filtered.length.toLocaleString()} total complaints plotted`;
+      `${Object.keys(zipCounts).length} zip codes · ${filtered.length.toLocaleString()} complaints plotted`;
+  }
+
+  // ── FDA summary cards ─────────────────────────────────────
+  function renderFDACards() {
+    const topDrugs     = countBy(filtered, 'drug_name').slice(0, 8);
+    const topReactions = countBy(filtered, 'reactions');
+
+    // Reactions are semicolon-separated — split and re-count
+    const rxCounts = {};
+    filtered.forEach(r => {
+      (r.reactions||'').split(';').map(s=>s.trim()).filter(Boolean).forEach(rx => {
+        rxCounts[rx] = (rxCounts[rx]||0)+1;
+      });
+    });
+    const topRx = Object.entries(rxCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+    const fmt = entries => entries.map(([k,v]) =>
+      `<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:0.5px solid var(--border)">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${k}</span>
+        <span style="font-weight:500;flex-shrink:0">${v.toLocaleString()}</span>
+      </div>`
+    ).join('');
+
+    document.getElementById('fda-drugs').innerHTML     = topDrugs.length ? fmt(topDrugs) : '<span style="color:var(--text3)">No data</span>';
+    document.getElementById('fda-reactions').innerHTML = topRx.length    ? fmt(topRx)    : '<span style="color:var(--text3)">No data</span>';
   }
 
   // ── Data table ────────────────────────────────────────────
@@ -393,47 +501,39 @@
       document.getElementById('table-count').textContent = '0';
       return;
     }
-    const cols = Object.keys(filtered[0]);
-    const start = page * PAGE_SIZE;
-    const slice = filtered.slice(start, start + PAGE_SIZE);
-    const thead = `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
-    const tbody = `<tbody>${slice.map(r =>
-      `<tr>${cols.map(c => `<td title="${r[c]||''}">${r[c] || '—'}</td>`).join('')}</tr>`
-    ).join('')}</tbody>`;
-    document.getElementById('data-table').innerHTML = thead + tbody;
+    const cols  = Object.keys(filtered[0]);
+    const slice = filtered.slice(page*PAGE_SIZE, (page+1)*PAGE_SIZE);
+    document.getElementById('data-table').innerHTML =
+      `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+       <tbody>${slice.map(r=>`<tr>${cols.map(c=>`<td title="${r[c]||''}">${r[c]||'—'}</td>`).join('')}</tr>`).join('')}</tbody>`;
     document.getElementById('table-count').textContent = filtered.length.toLocaleString();
-    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-    document.getElementById('page-info').textContent = `Page ${page+1} of ${totalPages}`;
+    const total = Math.ceil(filtered.length/PAGE_SIZE);
+    document.getElementById('page-info').textContent = `Page ${page+1} of ${total}`;
     document.getElementById('btn-prev').disabled = page === 0;
-    document.getElementById('btn-next').disabled = page >= totalPages - 1;
+    document.getElementById('btn-next').disabled = page >= total-1;
   }
 
-  function prevPage() { if (page > 0) { page--; renderTable(); } }
-  function nextPage() { if ((page+1) * PAGE_SIZE < filtered.length) { page++; renderTable(); } }
+  function prevPage() { if (page>0) { page--; renderTable(); } }
+  function nextPage() { if ((page+1)*PAGE_SIZE < filtered.length) { page++; renderTable(); } }
 
-  // ── Export ────────────────────────────────────────────────
+  // ── Exports ───────────────────────────────────────────────
   function exportCSV() {
     if (!filtered.length) return;
     const cols = Object.keys(filtered[0]);
-    const rows = [cols.join(','), ...filtered.map(r => cols.map(c => `"${(r[c]||'').toString().replace(/"/g,'""')}"`).join(','))];
-    download('311_clean.csv', rows.join('\n'), 'text/csv');
+    const rows = [cols.join(','), ...filtered.map(r => cols.map(c=>`"${(r[c]||'').toString().replace(/"/g,'""')}"`).join(','))];
+    download(source==='fda'?'fda_adverse_events.csv':'nyc_311_clean.csv', rows.join('\n'), 'text/csv');
   }
-
   function exportJSON() {
-    download('311_clean.json', JSON.stringify(filtered, null, 2), 'application/json');
+    download(source==='fda'?'fda_adverse_events.json':'nyc_311_clean.json', JSON.stringify(filtered,null,2), 'application/json');
   }
-
   function download(name, content, type) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([content], { type }));
-    a.download = name;
-    a.click();
+    a.href = URL.createObjectURL(new Blob([content],{type}));
+    a.download = name; a.click();
   }
 
-  // ── Airtable save ─────────────────────────────────────────
-  function saveAirtable() {
-    document.getElementById('at-modal').style.display = 'flex';
-  }
+  // ── Airtable ──────────────────────────────────────────────
+  function openATModal()  { document.getElementById('at-modal').style.display = 'flex'; }
   function closeATModal() {
     document.getElementById('at-modal').style.display = 'none';
     document.getElementById('at-progress').style.display = 'none';
@@ -449,46 +549,43 @@
     const token = document.getElementById('at-token').value.trim();
     const base  = document.getElementById('at-base').value.trim();
     const table = document.getElementById('at-table').value.trim();
-    if (!token || !base || !table) { alert('Please fill in all fields'); return; }
+    if (!token||!base||!table) { alert('Please fill in all fields'); return; }
 
     const btn = document.getElementById('at-save-btn');
     btn.disabled = true;
     document.getElementById('at-progress').style.display = 'block';
 
-    const BATCH = 10;
-    const cols  = Object.keys(filtered[0]);
+    const cols   = Object.keys(filtered[0]);
     let saved = 0, errors = 0;
+    const setStatus = msg => document.getElementById('at-status').textContent = msg;
+    const setBar    = pct => document.getElementById('at-bar').style.width = pct + '%';
 
-    const setStatus = (msg) => document.getElementById('at-status').textContent = msg;
-    const setBar    = (pct) => document.getElementById('at-bar').style.width = pct + '%';
-
-    for (let i = 0; i < filtered.length; i += BATCH) {
-      const batch = filtered.slice(i, i + BATCH);
+    for (let i = 0; i < filtered.length; i += 10) {
+      const batch   = filtered.slice(i, i+10);
       const records = batch.map(r => {
         const fields = {};
         cols.forEach(c => { if (r[c] != null && r[c] !== '') fields[c] = String(r[c]); });
         return { fields };
       });
       try {
-        const res = await fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records, typecast: true })
+        const res = await fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}`,{
+          method:'POST',
+          headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+          body: JSON.stringify({ records, typecast:true })
         });
-        if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || res.status); }
+        if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||res.status); }
         saved += batch.length;
       } catch(e) {
         errors++;
-        console.warn('Batch error:', e);
-        if (errors > 3) { setStatus(`Too many errors: ${e.message}`); btn.disabled = false; return; }
+        console.warn('Batch error:', e.message);
+        if (errors > 3) { setStatus(`Too many errors: ${e.message}`); btn.disabled=false; return; }
       }
-      const pct = Math.round((i + BATCH) / filtered.length * 100);
-      setBar(Math.min(pct, 100));
+      setBar(Math.min(Math.round((i+10)/filtered.length*100),100));
       setStatus(`Saved ${saved.toLocaleString()} / ${filtered.length.toLocaleString()} rows…`);
-      await new Promise(r => setTimeout(r, 250)); // rate limit
+      await new Promise(r=>setTimeout(r,250));
     }
 
-    setStatus(`Done — ${saved.toLocaleString()} rows saved${errors ? `, ${errors} batch errors` : ''}`);
+    setStatus(`Done — ${saved.toLocaleString()} rows saved${errors?`, ${errors} batch errors`:''}`);
     setBar(100);
     btn.style.display = 'none';
     document.getElementById('at-cancel-btn').style.display = 'none';
