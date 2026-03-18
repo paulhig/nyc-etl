@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NYC 311 ETL</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-brand" href="index.html">NYC <span>311</span> ETL</a>
+  <a href="ingest.html">Ingest</a>
+  <a href="clean.html">Clean</a>
+  <a href="dashboard.html">Dashboard</a>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">NYC 311 Service Requests — ETL Pipeline</div>
+    <div class="page-sub">Ingest, clean and explore New York City complaint data</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:28px">
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <div class="card-title"><div class="icon">1</div> Ingest</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Pull data from the NYC Open Data Socrata API with filters, or upload your own CSV file.</p>
+      <a href="ingest.html" class="btn btn-primary">Start ingesting →</a>
+    </div>
+    <div class="card" style="border-left:3px solid var(--warning)">
+      <div class="card-title"><div class="icon" style="background:var(--warning-light);color:var(--warning)">2</div> Clean</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Remove nulls, deduplicate, standardise casing, drop columns — see a live preview before committing.</p>
+      <a href="clean.html" class="btn">Go to clean →</a>
+    </div>
+    <div class="card" style="border-left:3px solid var(--success)">
+      <div class="card-title"><div class="icon" style="background:var(--success-light);color:var(--success)">3</div> Dashboard</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">KPIs, bar/line charts, a Leaflet map of zip code hotspots, and a filterable data table.</p>
+      <a href="dashboard.html" class="btn">View dashboard →</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">About the data</div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.7">
+      The <strong>NYC 311 Service Requests</strong> dataset contains every non-emergency service request made to New York City from 2010 to present — over 35 million records.
+      Each row represents a single complaint event with a timestamp, complaint type, responding agency, borough, zip code, and lat/lng coordinates.
+      Data is served via the <strong>Socrata Open Data API</strong> (no API key required for up to 1,000 rows per request).
+    </p>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <span class="tag tag-blue">REST API</span>
+      <span class="tag tag-blue">CSV upload</span>
+      <span class="tag tag-green">Zip code map</span>
+      <span class="tag tag-amber">35M+ records</span>
+      <span class="tag tag-gray">No API key needed</span>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

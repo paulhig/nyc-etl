@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clean — NYC 311 ETL</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-brand" href="index.html">NYC <span>311</span> ETL</a>
+  <a href="ingest.html">Ingest</a>
+  <a href="clean.html" class="active">Clean <span class="nav-badge" id="badge-raw"></span></a>
+  <a href="dashboard.html">Dashboard <span class="nav-badge" id="badge-dash" style="display:none"></span></a>
+</nav>
+
+<div class="page">
+  <div class="steps">
+    <div class="step done"><div class="step-num">✓</div> Ingest</div>
+    <div class="step-line"></div>
+    <div class="step active"><div class="step-num">2</div> Clean</div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-num">3</div> Dashboard</div>
+  </div>
+
+  <div class="page-header">
+    <div class="page-title">Clean data</div>
+    <div class="page-sub">Apply cleaning rules and preview the result before committing</div>
+  </div>
+
+  <div id="no-data" style="display:none">
+    <div class="alert alert-warning">No raw data found. <a href="ingest.html" style="color:var(--warning);font-weight:500">Go to Ingest first →</a></div>
+  </div>
+
+  <div id="main" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--text2)">Raw: <strong id="raw-count" style="color:var(--text)"></strong> rows</div>
+      <div style="font-size:13px;color:var(--text2)">→ After cleaning: <strong id="clean-count" style="color:var(--success)"></strong> rows</div>
+      <div id="removed-badge" class="tag tag-amber" style="display:none"></div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Rules -->
+      <div>
+        <div class="card">
+          <div class="card-title"><div class="icon">⚙</div> Cleaning rules</div>
+
+          <div class="rule-row">
+            <div class="rule-label">
+              Remove rows with null key fields
+              <div class="rule-sub">Drop rows missing: zip, borough, lat, lng, complaint type</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="r-nulls" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-label">
+              Remove duplicate rows
+              <div class="rule-sub">Deduplicate by unique_key (or first 5 fields if no key)</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="r-dupes" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-label">
+              Standardise text casing
+              <div class="rule-sub">Title-case complaint_type, descriptor, borough</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="r-case" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-label">
+              Trim whitespace
+              <div class="rule-sub">Strip leading/trailing spaces from all string fields</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="r-trim" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-label">
+              Normalise zip codes
+              <div class="rule-sub">Zero-pad to 5 digits, drop invalid formats</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="r-zip" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-label">
+              Validate coordinates
+              <div class="rule-sub">Remove rows with lat/lng outside NYC bounds</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="r-coords" checked onchange="applyRules()"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+        </div>
+
+        <!-- Column selector -->
+        <div class="card">
+          <div class="card-title"><div class="icon">⊞</div> Columns to keep</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Click a column to exclude it from the output</div>
+          <div id="col-chips"></div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card">
+          <div class="card-title"><div class="icon">📊</div> Cleaning summary</div>
+          <div id="clean-stats" style="font-size:13px;color:var(--text2);line-height:2"></div>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div>
+        <div class="card" style="height:fit-content">
+          <div class="card-title"><div class="icon">👁</div> Preview (first 10 rows)</div>
+          <div class="table-wrap">
+            <table id="clean-preview"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
+      <button class="btn btn-success" onclick="commitClean()" id="commit-btn">✓ Commit clean data — go to Dashboard →</button>
+      <button class="btn" onclick="window.location.href='ingest.html'">← Back to Ingest</button>
+      <button class="btn btn-danger" onclick="resetAll()">✕ Clear all data</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  let raw = [];
+  let cleaned = [];
+  let excludedCols = new Set();
+
+  function init() {
+    raw = App.loadRaw();
+    if (!raw || !raw.length) {
+      document.getElementById('no-data').style.display = 'block';
+      return;
+    }
+    document.getElementById('main').style.display = 'block';
+    document.getElementById('raw-count').textContent = raw.length.toLocaleString();
+    buildColChips();
+    applyRules();
+  }
+
+  function buildColChips() {
+    const cols = Object.keys(raw[0] || {});
+    const el = document.getElementById('col-chips');
+    el.innerHTML = cols.map(c =>
+      `<span class="col-chip" id="chip-${c}" onclick="toggleCol('${c}')">${c}<span class="x">✕</span></span>`
+    ).join('');
+  }
+
+  function toggleCol(col) {
+    if (excludedCols.has(col)) excludedCols.delete(col);
+    else excludedCols.add(col);
+    document.getElementById('chip-' + col).classList.toggle('excluded', excludedCols.has(col));
+    applyRules();
+  }
+
+  function titleCase(s) {
+    if (!s) return s;
+    return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function applyRules() {
+    const rNulls  = document.getElementById('r-nulls').checked;
+    const rDupes  = document.getElementById('r-dupes').checked;
+    const rCase   = document.getElementById('r-case').checked;
+    const rTrim   = document.getElementById('r-trim').checked;
+    const rZip    = document.getElementById('r-zip').checked;
+    const rCoords = document.getElementById('r-coords').checked;
+
+    let data = raw.map(r => ({ ...r }));
+    const stats = { nulls: 0, dupes: 0, badZip: 0, badCoords: 0 };
+
+    // Trim
+    if (rTrim) {
+      data = data.map(r => {
+        const o = {};
+        for (const k in r) o[k] = typeof r[k] === 'string' ? r[k].trim() : r[k];
+        return o;
+      });
+    }
+
+    // Nulls
+    if (rNulls) {
+      const before = data.length;
+      const required = ['incident_zip','borough','complaint_type'].filter(f => data[0] && f in data[0]);
+      data = data.filter(r => required.every(f => r[f] && String(r[f]).trim()));
+      stats.nulls = before - data.length;
+    }
+
+    // Dupes
+    if (rDupes) {
+      const before = data.length;
+      const seen = new Set();
+      data = data.filter(r => {
+        const key = r.unique_key || [r.created_date, r.complaint_type, r.incident_zip, r.borough].join('|');
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+      stats.dupes = before - data.length;
+    }
+
+    // Zip normalise
+    if (rZip && data[0] && 'incident_zip' in data[0]) {
+      const before = data.length;
+      data = data.filter(r => {
+        const z = String(r.incident_zip || '').replace(/\D/g,'');
+        if (z.length === 5) { r.incident_zip = z; return true; }
+        if (z.length === 4) { r.incident_zip = '0' + z; return true; }
+        return false;
+      });
+      stats.badZip = before - data.length;
+    }
+
+    // Coords
+    if (rCoords && data[0] && 'latitude' in data[0]) {
+      const before = data.length;
+      data = data.filter(r => {
+        const lat = parseFloat(r.latitude), lng = parseFloat(r.longitude);
+        return !isNaN(lat) && !isNaN(lng) && lat >= 40.4 && lat <= 40.95 && lng >= -74.3 && lng <= -73.6;
+      });
+      stats.badCoords = before - data.length;
+    }
+
+    // Title case
+    if (rCase) {
+      data = data.map(r => {
+        const o = { ...r };
+        ['complaint_type','descriptor','borough','status'].forEach(f => {
+          if (o[f]) o[f] = titleCase(String(o[f]));
+        });
+        return o;
+      });
+    }
+
+    // Exclude columns
+    if (excludedCols.size) {
+      data = data.map(r => {
+        const o = {};
+        for (const k in r) if (!excludedCols.has(k)) o[k] = r[k];
+        return o;
+      });
+    }
+
+    cleaned = data;
+
+    // Update counts
+    document.getElementById('clean-count').textContent = cleaned.length.toLocaleString();
+    const removed = raw.length - cleaned.length;
+    const badge = document.getElementById('removed-badge');
+    if (removed > 0) {
+      badge.style.display = 'inline-block';
+      badge.textContent = `${removed.toLocaleString()} rows removed`;
+    } else {
+      badge.style.display = 'none';
+    }
+
+    // Stats
+    document.getElementById('clean-stats').innerHTML = [
+      `<div>Null key field rows removed: <strong>${stats.nulls.toLocaleString()}</strong></div>`,
+      `<div>Duplicate rows removed: <strong>${stats.dupes.toLocaleString()}</strong></div>`,
+      `<div>Invalid zip codes removed: <strong>${stats.badZip.toLocaleString()}</strong></div>`,
+      `<div>Out-of-bounds coordinates removed: <strong>${stats.badCoords.toLocaleString()}</strong></div>`,
+      `<div>Columns excluded: <strong>${excludedCols.size}</strong></div>`,
+      `<div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">Final row count: <strong style="color:var(--success)">${cleaned.length.toLocaleString()}</strong></div>`,
+    ].join('');
+
+    // Preview table
+    renderPreview();
+  }
+
+  function renderPreview() {
+    if (!cleaned.length) {
+      document.getElementById('clean-preview').innerHTML = '<tbody><tr><td style="color:var(--text3)">No rows remaining</td></tr></tbody>';
+      return;
+    }
+    const cols = Object.keys(cleaned[0]);
+    const sample = cleaned.slice(0, 10);
+    const thead = `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
+    const tbody = `<tbody>${sample.map(r =>
+      `<tr>${cols.map(c => `<td title="${r[c]||''}">${r[c] || '<span style="color:var(--text3)">—</span>'}</td>`).join('')}</tr>`
+    ).join('')}</tbody>`;
+    document.getElementById('clean-preview').innerHTML = thead + tbody;
+  }
+
+  function commitClean() {
+    if (!cleaned.length) { alert('No rows to commit.'); return; }
+    App.saveClean(cleaned);
+    const btn = document.getElementById('commit-btn');
+    btn.textContent = '✓ Saved! Redirecting…';
+    btn.disabled = true;
+    setTimeout(() => window.location.href = 'dashboard.html', 1000);
+  }
+
+  function resetAll() {
+    if (!confirm('Clear all ingested and cleaned data?')) return;
+    App.clearAll();
+    window.location.href = 'ingest.html';
+  }
+
+  init();
+</script>
+</body>
+</html>
