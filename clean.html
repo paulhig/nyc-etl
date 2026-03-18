@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clean — NYC 311 ETL</title>
 <link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -122,8 +123,47 @@
 
     <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
       <button class="btn btn-success" onclick="commitClean()" id="commit-btn">✓ Commit clean data — go to Dashboard →</button>
+      <button class="btn" onclick="downloadCSV()">↓ Download cleaned CSV</button>
       <button class="btn" onclick="window.location.href='ingest.html'">← Back to Ingest</button>
       <button class="btn btn-danger" onclick="resetAll()">✕ Clear all data</button>
+    </div>
+
+    <!-- Quick viz panel -->
+    <div class="card" id="viz-card" style="margin-top:16px">
+      <div class="card-title"><div class="icon">◈</div> Quick visualise</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="field" style="min-width:160px">
+          <label>Chart type</label>
+          <select id="viz-type" onchange="updateViz()">
+            <option value="bar">Bar — count by category</option>
+            <option value="line">Line — values over time</option>
+            <option value="pie">Pie — proportions</option>
+          </select>
+        </div>
+        <div class="field" style="min-width:160px">
+          <label id="viz-x-label">Column (X axis / category)</label>
+          <select id="viz-x" onchange="updateViz()"></select>
+        </div>
+        <div class="field" style="min-width:160px" id="viz-y-wrap">
+          <label>Numeric column (Y axis)</label>
+          <select id="viz-y" onchange="updateViz()">
+            <option value="_count">— count rows —</option>
+          </select>
+        </div>
+        <div class="field" style="min-width:100px">
+          <label>Top N</label>
+          <select id="viz-topn" onchange="updateViz()">
+            <option value="10" selected>Top 10</option>
+            <option value="15">Top 15</option>
+            <option value="20">Top 20</option>
+            <option value="50">Top 50</option>
+          </select>
+        </div>
+      </div>
+      <div style="position:relative;height:300px">
+        <canvas id="viz-chart"></canvas>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px" id="viz-note"></div>
     </div>
   </div>
 </div>
@@ -289,6 +329,7 @@
 
     // Preview table
     renderPreview();
+    buildVizSelects();
   }
 
   function renderPreview() {
@@ -303,6 +344,136 @@
       `<tr>${cols.map(c => `<td title="${r[c]||''}">${r[c] || '<span style="color:var(--text3)">—</span>'}</td>`).join('')}</tr>`
     ).join('')}</tbody>`;
     document.getElementById('clean-preview').innerHTML = thead + tbody;
+  }
+
+  // ── Download cleaned CSV ─────────────────────────────────
+  function downloadCSV() {
+    if (!cleaned.length) { alert('No cleaned data yet.'); return; }
+    const cols = Object.keys(cleaned[0]);
+    const rows = [
+      cols.join(','),
+      ...cleaned.map(r => cols.map(c => `"${(r[c]||'').toString().replace(/"/g,'""')}"`).join(','))
+    ];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
+    a.download = 'cleaned_data.csv';
+    a.click();
+  }
+
+  // ── Quick viz ─────────────────────────────────────────────
+  let vizChart = null;
+  const VIZ_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#6366f1'];
+
+  function buildVizSelects() {
+    if (!cleaned.length) return;
+    const cols = Object.keys(cleaned[0]);
+
+    // Detect numeric cols
+    const numCols = cols.filter(c => {
+      const sample = cleaned.slice(0,20).map(r => r[c]).filter(Boolean);
+      return sample.length > 0 && sample.every(v => !isNaN(parseFloat(v)));
+    });
+
+    // X axis — all columns
+    const xSel = document.getElementById('viz-x');
+    xSel.innerHTML = cols.map(c => `<option value="${c}">${c}</option>`).join('');
+    // Default X to first non-numeric col
+    const firstCat = cols.find(c => !numCols.includes(c));
+    if (firstCat) xSel.value = firstCat;
+
+    // Y axis — numeric cols + count
+    const ySel = document.getElementById('viz-y');
+    ySel.innerHTML = '<option value="_count">— count rows —</option>' +
+      numCols.map(c => `<option value="${c}">${c} (avg)</option>`).join('');
+
+    updateViz();
+  }
+
+  function updateViz() {
+    if (!cleaned.length) return;
+    const type  = document.getElementById('viz-type').value;
+    const xCol  = document.getElementById('viz-x').value;
+    const yCol  = document.getElementById('viz-y').value;
+    const topN  = parseInt(document.getElementById('viz-topn').value);
+
+    // Show/hide Y wrap for count-based charts
+    document.getElementById('viz-y-wrap').style.opacity = type === 'bar' || type === 'line' ? '1' : '0.4';
+
+    // Update X label
+    document.getElementById('viz-x-label').textContent =
+      type === 'line' ? 'Date/time column' : 'Category column (X axis)';
+
+    // Aggregate
+    const agg = {};
+    cleaned.forEach(r => {
+      const key = r[xCol] || '(empty)';
+      if (!agg[key]) agg[key] = { count: 0, sum: 0, n: 0 };
+      agg[key].count++;
+      if (yCol !== '_count') {
+        const v = parseFloat(r[yCol]);
+        if (!isNaN(v)) { agg[key].sum += v; agg[key].n++; }
+      }
+    });
+
+    let entries = Object.entries(agg).map(([k, v]) => ({
+      label: k,
+      value: yCol === '_count' ? v.count : (v.n ? Math.round((v.sum / v.n) * 100) / 100 : 0)
+    }));
+
+    // Sort and slice
+    if (type === 'line') {
+      entries.sort((a,b) => a.label.localeCompare(b.label));
+    } else {
+      entries.sort((a,b) => b.value - a.value);
+    }
+    entries = entries.slice(0, topN);
+
+    const labels = entries.map(e => e.label.length > 20 ? e.label.slice(0,18)+'…' : e.label);
+    const values = entries.map(e => e.value);
+    const yLabel = yCol === '_count' ? 'Count' : `Avg ${yCol}`;
+
+    document.getElementById('viz-note').textContent =
+      `${entries.length} ${type === 'line' ? 'time points' : 'categories'} · ${cleaned.length.toLocaleString()} rows · Y: ${yLabel}`;
+
+    const ctx = document.getElementById('viz-chart').getContext('2d');
+    if (vizChart) vizChart.destroy();
+
+    const isLine = type === 'line';
+    const isPie  = type === 'pie';
+    const color  = PALETTE_FOR_VIZ(values.length, isPie);
+
+    vizChart = new Chart(ctx, {
+      type: isPie ? 'doughnut' : isLine ? 'line' : 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: isPie ? color : isLine ? 'rgba(37,99,235,.1)' : color[0],
+          borderColor:     isLine ? '#2563eb' : isPie ? '#fff' : undefined,
+          borderWidth:     isPie ? 2 : isLine ? 2 : 0,
+          borderRadius:    isPie ? 0 : 4,
+          fill:            isLine,
+          tension:         0.3,
+          pointRadius:     isLine && values.length > 60 ? 0 : 3,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: isPie, position: 'right', labels: { font:{size:11}, boxWidth:12 } }
+        },
+        scales: isPie ? {} : {
+          x: { ticks:{ font:{size:10}, maxRotation:35, maxTicksLimit: isLine ? 12 : 20 }, grid:{ display:false } },
+          y: { ticks:{ font:{size:11} }, grid:{ color:'rgba(0,0,0,.05)' }, title:{ display:true, text:yLabel, font:{size:11} } }
+        }
+      }
+    });
+  }
+
+  function PALETTE_FOR_VIZ(n, multi) {
+    const p = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#6366f1'];
+    if (multi) return Array.from({length:n}, (_,i) => p[i % p.length]);
+    return p[0];
   }
 
   function commitClean() {
