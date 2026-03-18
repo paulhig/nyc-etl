@@ -142,6 +142,20 @@
     }
     document.getElementById('main').style.display = 'block';
     document.getElementById('raw-count').textContent = raw.length.toLocaleString();
+
+    // Warn if stale clean data exists from a previous session
+    const existingClean = App.loadClean();
+    const meta = App.loadMeta() || {};
+    if (existingClean && existingClean.length) {
+      const staleAlert = document.getElementById('alert-area') || document.createElement('div');
+      staleAlert.innerHTML = `<div class="alert alert-warning" style="margin-bottom:12px">
+        ⚠ Previously cleaned data (${existingClean.length.toLocaleString()} rows) has been cleared — applying rules to the new dataset now.
+      </div>`;
+      document.getElementById('main').prepend(staleAlert);
+      App.saveClean([]);
+      setTimeout(() => staleAlert.remove(), 4000);
+    }
+
     buildColChips();
     applyRules();
   }
